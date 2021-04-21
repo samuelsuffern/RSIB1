@@ -1,0 +1,425 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\usepackage{amsmath}
+
+\usepackage{natbib}
+\usepackage{subfigure}
+\usepackage{graphicx}
+\usepackage{mcode}
+\definecolor{mygreen}{RGB}{0,100,0}
+\usepackage{color}   %May be necessary if you want to color links
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true, %set true if you want colored links
+    linktoc=all,     %set to all if you want both sections and subsections linked
+    linkcolor=blue,  %choose some color if you want links to stand out
+}
+
+\lstset{language=Matlab,%
+    %basicstyle=\color{red},
+    breaklines=true,%
+    morekeywords={matlab2tikz},
+    keywordstyle=\color{blue},%
+    morekeywords=[2]{1}, keywordstyle=[2]{\color{black}},
+    identifierstyle=\color{black},%
+    stringstyle=\color{purple},
+    commentstyle=\color{mygreen},%
+    showstringspaces=false,%without this there will be a symbol in the places where there is a space
+    numbers=left,%
+    numberstyle={\tiny \color{black}},% size of the numbers
+    numbersep=9pt, % this defines how far the numbers are from the text
+    emph=[1]{for,switch,case,end,break},emphstyle=[1]\color{blue}, %some words to emphasise
+    %emph=[2]{word1,word2}, emphstyle=[2]{style},  
+    }
+\begin{document}
+\begin{titlepage}
+\centering
+{\scshape\LARGE Práctica B1 RSI\par}
+	\vspace{1cm}
+	{\scshape\Large Parte 1. \par}
+	\vspace{1.5cm}
+	{\huge\bfseries Procesado de variaciones rápidas de señal debidas a multitrayecto\par}
+	\vspace{2cm}
+	{\Large\itshape Samuel John Suffern Sánchez\par}
+	\vfill
+	\vfill
+% Bottom of the page
+	{\large \today\par}
+\end{titlepage}
+
+
+%Indice
+\tableofcontents
+\listoffigures
+\pagebreak
+
+
+
+
+\section{Inicio del entorno en Matlab}
+    \par Los gráficos y resultados de esta práctica se obtienen con la función \mcode{pr10.mat}. 
+    \par Lo primero que haremos será cargar en nuestro workspace el fichero: \mcode{series11.mat}
+    \begin{lstlisting}
+        load series11.mat
+    \end{lstlisting}
+
+    \par Contiene una señal que a tiene en la primera columna el eje de tiempo y en la segunda, la potencia recibida en dBm. El eje de tiempos está muestreado cada 
+    \( t_{s} = 0.05 \hspace{0.1cm} s\), es decir,
+    \( f_s = \frac{1}{t_s} = 20 \hspace{0.1cm} Hz\). Existe un muestreo uniforme. La resta entre dos muestras consecutivas, me da el muestreo que estamos utilizando.
+    \begin{lstlisting}
+        tAxix = series11(:,1); % eje temporal
+        ts = tAxix(2)-tAxix(1); % muestreo del eje de tiempos
+        PdBm = series11(:,2);
+        figure, plot(tAxix, PdBm)
+        xlabel('Elapsed time, s')
+        ylabel('Received power, dBm');title('Potencia recibida [dBm]');
+    \end{lstlisting}
+    \par Las líneas de código muestran la forma de la señal recibida a lo largo del tiempo en unidades logarítmicas .
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B1/series11.eps}
+        \caption{Potencia recibida en unidades logarítmicas}
+        \label{fig:series_11}
+    \end{figure}
+
+    \par La señal ha sido recibida en un instrumento de medida o receptor de prueba, cuando el transmisor emite una portadora sin modular a una frecuencia \(f_0=2.0  \hspace{0.1cm}GHz \). El receptor se supone que tiene una impedancia \( Z=R=50\Omega\).
+    \par Los valores medidos están en dBm (dB relativos a 1 mW).
+    \par En Matlab, podemos obtener la misma gráfica pero en unidades naturales.
+    \begin{lstlisting}
+        pW = 10.^(PdBm/10)/1000;   % divide by 1000 to go from mW to W
+        figure, plot(tAxix, pW)
+        xlabel('Elapsed time, s')
+        ylabel('Received power, W');title('Potencia recibida [W]');
+    \end{lstlisting}
+    \par En la siguiente carilla observamos la gráfica de la señal a lo largo del tiempo en unidades lineales.
+    \clearpage
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B1/p_output_lineal.eps}
+        \caption{Representación de la potencia recibida en unidades naturales}
+        \label{fig:received_power_unidades_naturales}
+    \end{figure}
+\section{Estudio de la tensión}
+    \par Utilizando las expresiones del capítulo 2 de Teoría, las variaciones de voltaje se podían expresar como:
+    \begin{equation}
+        \tag{amplitud de la señal RF}
+        v = \sqrt{2p_r}|h_0|
+        \label{eq:voltaje_entrada}
+    \end{equation}
+    con \(p_r : Potencia \hspace{0.1cm}media\hspace{0.1cm} recibida\) y \( |h_0| : variaciones\hspace{0.1cm} aleatorias \hspace{0.1cm}del \hspace{0.1cm}canal\).
+    \par V, es función de \(|h_0|\), variable aleatoria que representa la envolvente de la señal y sabemos que se puede caracterizar mediante una distribución Rayleigh. Por tanto V, seguirá también una distribución Rayleigh con función densidad de probabilidad: 
+    \begin{equation}
+    \tag{función densidad de probabilidad}
+        f_v(v) = \frac{v}{p_r}exp\left({-\frac{v^2}{2p_r}}\right)
+        \label{eq:fdp}
+    \end{equation}
+    \par En Clase de Teoría (Grupos A) supusimos que la impedancia era \(R=1 \) Modificamos la expresión anterior para tener en cuenta la impedancia:
+    \begin{equation}
+    \tag{voltaje a la entrada del receptor}
+        v = \sqrt{2p_rR}|h_0|
+        \label{eq:voltaje_entrada_R}
+    \end{equation}
+    \subsection{Tensión en Matlab}
+        \par En matlab por tanto será de la siguiente manera:
+        \begin{lstlisting}
+            R = 50; %Impedancia
+            v = sqrt(2*pW*R); % Convierto a voltios
+            figure, plot(tAxix,v)
+            xlabel('Elapsed time, s')
+            ylabel('Voltage at Rx input, V');title('Tensión a la entrada del receptor [V]')
+        \end{lstlisting}
+        \par En la siguiente carilla observamos la tensión de la señal recibida en unidades lineales sin normalizar.
+        \clearpage
+        \begin{figure}[h]
+            \centering
+            \includegraphics[scale=0.55]{figures_outputs/B1/v_output.eps}
+            \caption{Tensión en unidades lineales}
+            \label{fig:v_output}
+        \end{figure}
+        \subsubsection{Función densidad de probabilidad}
+            \par Su función de densidad de probabilidad en función de la impedancia:
+            \begin{equation}
+            \tag{función densidad de probabilidad (R)}
+                f_v(v) = \frac{v}{Rp_r}exp\left({-\frac{v^2}{2Rp_r}}\right)
+                \label{eq:fdp_R}
+            \end{equation}
+    \subsection{Tensión normalizada en Matlab}
+        \par Definiendo ahora una nueva variable aleatoria,normalizada con respecto a la potencia media:
+        \begin{equation}
+        \tag{voltaje a la entrada del receptor normalizado}
+            v' =\frac{v}{ \sqrt{2p_rR}} = |h_0|
+            \label{eq:voltaje_entrada_normalizado}
+        \end{equation}
+        \par En matlab serían las siguientes líneas de código:
+        \begin{lstlisting}
+            vnorm = v / sqrt(2*meanPw*R); %normalizo
+            figure, plot(tAxix, vnorm)
+            xlabel('Elapsed time, s')
+            ylabel('Normalized voltage (linear)'); title('Voltaje normalizado');
+        \end{lstlisting}
+        \begin{figure}[h]
+            \centering
+            \includegraphics[scale=0.55]{figures_outputs/B1/v_output_norm.eps}
+            \caption{Voltaje normalizado}
+            \label{fig:my_label}
+        \end{figure}
+        \clearpage
+        \subsubsection{Función densidad de probabilidad y Función de distribución}
+            \par En cuanto a su \textbf{función densidad de probabilidad}:
+            \begin{equation}
+                \tag{función densidad de probabilidad normalizada}
+                f_v(v') = 2v'e^{-v'^2}
+                \label{eq:fdp_norm}
+            \end{equation}
+            \textbf{Función de distribución}:
+            \begin{equation}
+                \tag{Función de distribución normalizada}
+                P(v'\leq U) = F_{v'}(U)=1-exp(-U^2)
+                \label{eq:FD_norm}
+            \end{equation}
+            \par Probabilidad que mi voltaje normalziado esté por debajo de un determinado valor.
+            \par Recordemos como son las formas teóricas de \ref{eq:fdp_norm} y \ref{eq:FD_norm}. Para ello hacemos los siguientes cálculos en Matlab.
+            \par Queremos verificar que v' ( en Matlab \mcode{vnorm} ) sigue una distribución Rayleigh.:
+            \begin{lstlisting}
+                %Voy a pintar la fdp normalizada
+                Max = 3.0;
+                vnormAxis = [0:0.01:Max]; % Creo un eje para pintar, no debo usar Vnorm, son valroes desordenado
+                fdp = 2*vnormAxis.*exp(-vnormAxis.^2);
+                FD = 1-exp(-vnormAxis.^2);
+                figure, plot(vnormAxis, fdp, vnormAxis, FD, '--', 'LineWidth',2)
+                title('Theoretical, rms = 1 Rayleigh pdf and CDF')
+                xlabel('Normalized voltage (linear)')
+                ylabel('Probability')
+                legend('pdf','CDF')
+                grid
+            \end{lstlisting}  
+            \par Observo que la salida se corresponden con los valores teóricos de la fpd y FD del voltaje normalizado.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[scale=0.55]{figures_outputs/B1/rayleigh_fpd.eps}
+                \caption{Función densidad y distribución de probabilidad de la tensión normalizada calculada con Matlab}
+                \label{fig:fdp_norm}
+            \end{figure}
+    \subsection{Relación forma teórica respecto a la experimental}
+        \subsubsection{Función densidad de probabilidad teórica vs experimental}
+            \par Vamos a relacionar la función densidad de probabilidad teórica con la experimental.
+            \begin{lstlisting}
+                Nbins = 20; %Nbins por defecto es 20
+                [a,b] = hist(vnorm, Nbins);
+                a = a/length(vnorm);%Probabilidad estimada
+                histBin = b(2)-b(1);
+                figure, bar(b,a,'y'), hold on
+                plot(vnormAxis, fdp*histBin,'r','LineWidth',2)
+                plot(vnormAxis, fdp,'.r','LineWidth',2)
+                title('Theoretical, rms = 1 Rayleigh pdf and experimental pdf')
+                xlabel('Normalized voltage (linear)')
+                ylabel('Probability')
+                legend('Histogram','pdf x histBin','pdf')
+                xlim([0 Max])
+            \end{lstlisting}
+            \begin{figure}[h]
+                \centering
+                \includegraphics[scale=0.60]{figures_outputs/B1/fpd_teoric_vs_exp.eps}
+                \caption{Relación entre la forma teórica y la experimental de la fdp }
+                \label{fig:fdp_teor_vs_exp}
+            \end{figure}
+        \subsubsection{Función de Distribución teórica vs experimental}
+            \par Ahora queremos observar la función de distribución teórica con respecto a la experimental.
+            \begin{lstlisting}
+                aa = cumsum(a);
+                figure, bar(b, aa,'y'), hold
+                plot(vnormAxis, FD, 'r', 'LineWidth',2)
+                title('Theoretical, rms = 1 Rayleigh CDF and experimental CDF')
+                xlabel('Normalized voltage (linear)')
+                ylabel('Probability')
+                xlim([0 Max])
+            \end{lstlisting}
+            \par La función de distribución experimental se aproxima mucho a la calculada teóricamente.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[scale=0.55]{figures_outputs/B1/FD_teor_vs_exp.eps}
+                \caption{Función de distribución teórica con respecto a la experimental}
+                \label{fig:FD_teór_vs_exp}
+            \end{figure}
+            \par Una vez estudiado el efecto de la tensión, pasamos a ver el comportamiento en potencia.
+\section{Estudio de la potencia}
+    \par Vamos a realizar el estudio de la potencia y vamos a ver si coinciden las funciones densidad y distribución de probabilidad teóricas con la experimental.
+    \par Para empezar vamos a definir la potencia:
+    \begin{equation}
+        \tag{Variable aleatoria de la potencia}
+        P = \frac{v^2}{2}
+    \end{equation}
+    \par No añadimos la impendancia debido a que ya está incluido en el término \(v\).
+    \subsection{Representación de la potencia en Matlab}
+        \begin{lstlisting}
+            p = (v.^2)/2; % Defino la potencia en lugar del voltaje
+            figure, plot(tAxix, p)
+            xlabel('Elapsed time, s')
+            ylabel('Power (linear)')
+        \end{lstlisting}
+        \par Observamos la forma de la potencia en función del tiempo.
+        \begin{figure}[h]
+            \centering
+            \includegraphics[scale=0.55]{figures_outputs/B1/p_output_lineal.eps}
+            \caption{Potencia en unidades lineales}
+            \label{fig:pot_unidades_lineal}
+        \end{figure}
+        \subsubsection{Función densidad de probabilidad}
+            \par En este caso se tiene que la potencia sigue una distribución exponecial con función densidad de probabilidad:
+            \begin{equation}
+                \tag{Función densidad de probabilidad de la potencia}
+                f_p (P) = \frac{1}{P_r}e^{-\frac{P}{P_r}}
+            \end{equation}
+    \subsection{Representación de la potencia normalizada en Matlab}
+        \par Ahora vamos a normalizar para obtener una nueva variable aleatoria:
+        \begin{equation}
+            P' = \frac{P}{P_r \cdot R}
+        \end{equation}
+        \par Si ahora observamos la potencia normalizada con respecto a al tiempo:
+        \begin{lstlisting}
+            pnorm = p / (mean(pW)*R); %normalizo
+            figure, plot(tAxix, pnorm)
+            xlabel('Elapsed time, s')
+            ylabel('Normalized power (linear)')
+        \end{lstlisting}
+        \begin{figure}[h]
+            \centering
+            \includegraphics[scale=0.5]{figures_outputs/B1/p_output_normal.eps}
+            \caption{Potencia normalizada en unidades lineales}
+            \label{fig:pot_unidades_lineal}
+        \end{figure}
+        \subsubsection{Función de densidad y distribución de la potencia normalizada}
+            \par Vamos a estudiar de manera conjunta la función densidad de probabilidad y la función de distribución teóricas de la potencia normalizada. Para ello utilizamos las siguientes expresiones:
+            \par \textbf{Función densidad de probabilidad}:
+                \begin{equation}
+                    \tag{Función densidad de probabilidad}
+                    f_p (P') = e^{-P'}
+                \end{equation}
+            \par \textbf{Función de distribución}:
+                \begin{equation}
+                    \tag{Función de distribución}
+                    F_{p'}(U) = P(P' \leq U ) = 1-e^{-U}
+                \end{equation}
+            \par Ahora aplicamos las ecuaciones utilizando matlab:
+            \begin{lstlisting}
+                Max = 10.0;
+                pnormAxis = [0:0.01:Max]; % Creo un eje para pintar, no debo usar Vnorm, son valroes desordenado
+                fdp_p = exp(-pnormAxis);
+                FD_p = 1-exp(-pnormAxis);
+                figure, plot(pnormAxis, fdp_p, pnormAxis, FD_p, '--', 'LineWidth',2)
+                title('Theoretical, mean = 1 Exponential pdf and CDF')
+                xlabel('Normalized voltage (linear)');ylabel('Probability');legend('pdf','CDF')
+            \end{lstlisting}
+            \par La salida corresponde a las curvas función de distribución y función densidad de probabilidad teóricas de la potencia.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[scale=0.5]{figures_outputs/B1/exponencial_teorica.eps}
+                \caption{Curvas exponencial de la función densidad de probabilidad y función de distribución teóricas de la potencia}
+                \label{fig:my_label}
+            \end{figure}
+        \subsubsection{Función de densidad de probabilidad teórica vs experimental}
+            \par Una vez conocemos como es la curva teórica de la fdp, tenemos que comprobar si la curva experimental se acerca o no.
+            \begin{lstlisting}
+                Nbins = 20; 
+                [a,b] = hist(pnorm, Nbins);
+                a = a/length(pnorm);
+                histBin = b(2)-b(1);
+                figure, bar(b,a,'y'), hold on
+                plot(pnormAxis, fdp_p*histBin,'r','LineWidth',2)
+                plot(pnormAxis, fdp_p,'.r','LineWidth',2)
+                title('Theoretical, mean=1 exponential pdf and experimental pdf')
+                xlabel('Normalized voltage (linear)')
+                ylabel('Probability')
+                legend('Histogram','pdf x histBin','pdf')
+                xlim([0 Max])
+             \end{lstlisting}
+             \par Obtenemos la siguiente salida:
+        \begin{figure}[h]
+            \centering
+            \includegraphics[scale=0.6]{figures_outputs/B1/fdp_teor_vs_exp.eps}
+            \caption{Similitud entre la función densidad de probabilidad teórica y experimental}
+            \label{fig:fpd_teor_vs_exp_exponential}
+        \end{figure}
+        \par Observamos que las probabilidades obtenidas son bastante bajas y no se aproximan al valor teórico. Si quisiemos mejorar esto, basta con hacer la derivada:
+        \begin{lstlisting}
+             Nbins = 20; 
+                [a,b] = hist(pnorm, Nbins);
+                a = a/length(pnorm);
+                a=[0.0 , a];
+                histBin = b(2)-b(1);
+                aAcum = cumsum(a);
+                aAprox = diff(aAcum)/histBin;
+                figure, bar(b,aAprox,'y'), hold on
+                plot(pnormAxis, fdp_p,'.r','LineWidth',2)
+                title('Theoretical, mean=1 exponential pdf and experimental pdf')
+                xlabel('Normalized voltage (linear)')
+                ylabel('Probability')
+                legend('Histogram','pdf')
+                xlim([0 Max])
+        \end{lstlisting}
+        \par Obtendríamos la siguiente salida:
+        \clearpage
+         \begin{figure}[h]
+         \centering
+         \includegraphics[scale=0.55]{figures_outputs/B1/fdp_p_close.eps}
+         \caption{Aumento de la probabilidad al hacer la media de los valores tomados en el histograma}
+         \label{fig:my_label}
+     \end{figure}
+     \par Podemos observar una mejoría en la aproximación haciendo una derivada discreta. Esta verifiación a ojo no vale, tendríamos que hacer la prueba de chi cuadrado.
+    \par Si ahora comparamos función de distribución teórica con respecto a la experimental:
+    \begin{lstlisting}
+        [a,b] = hist(pnorm, Nbins);
+        a = a/length(pnorm);
+        aa = cumsum(a);
+        figure, bar(b, aa, 'y'),hold
+        plot(pnormAxis, FD_p, 'r', 'LineWidth',2)
+        title('Theoretical, mean = 1 Exponential CDF and experimental CDF')
+        xlabel('Normalized voltage (linear)')
+        ylabel('Probability')
+        xlim([0 Max])
+    \end{lstlisting} 
+     
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B1/FD_comparacion.eps}
+        \caption{Comparación función distribución teórica vs experimental}
+        \label{fig:my_label}
+    \end{figure}
+    \par Aproximación bastante ajustada.
+    \clearpage
+\section{Superposición de las funciones}
+    \par Por último vamos a representar en la misma gráfica superpuestas, las pdfs y CDFs de las dos series v' y p' con el eje-x en dB.Basta con escribir las siguientes líneas de código:
+    \begin{lstlisting}
+        figure,
+        vnormdb= 20*log10(vnormAxis);
+        pnormdb=10*log10(pnormAxis);
+        semilogy(vnormdb,fdp);hold on;
+        semilogy(pnormdb,fdp_p);hold off;title('Superposición pdfs');ylabel("Probability");xlabel("dB");legend('Pdf tensión normalizada','Pdf potencia normalizada')
+    \end{lstlisting}
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B1/fpd_pot_tens.eps}
+        \caption{Superposición funciones densidad de probabilidad teóricas de la tensión y potencia normalizadas}
+        \label{fig:my_label}
+    \end{figure}
+    \par Ahora vemos la superposición de las funciones distribución:
+    
+    \begin{lstlisting}
+        semilogy(vnormdb,FD);hold on;
+        semilogy(pnormdb,FD_p);hold off;title('Superposición FDs');ylabel("Probability");xlabel("dB");
+        legend('FD tensión normalizada','FD potencia normalizada'); 
+    \end{lstlisting}
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B1/FD_pot_tension.eps}
+        \caption{Superposición funciones distribución de probabilidad teóricas de la tensión y potencia normalizadas}
+        \label{fig:my_label}
+    \end{figure}      
+    \par Se superponen una encima de la otra debido a la normalización que se le hacen a las variables aleatorias  \( v' \) y \( p' \)
+    \par 
+
+\end{document}
+
